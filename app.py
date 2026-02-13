@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration
-APP_NAME = "Turing Nova AI - Code Generator"
+APP_NAME = "Devil's Code Generator"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 MODEL = "stepfun/step-3.5-flash:free"
@@ -60,14 +60,14 @@ def main():
     # Sidebar for any future settings, keeping it simple for now
     with st.sidebar:
         st.title(APP_NAME)
-        st.info("Powered by OpenRouter & Streamlit")
+        st.info("get code from AI and make it better")
 
     col1, col2 = st.columns([1, 3])
     
     with col1:
         language = st.selectbox(
             "Language",
-            ["Python", "Java", "C++", "JavaScript", "Go", "Rust", "TypeScript", "SQL", "HTML/CSS", "Shell Script"]
+            ["Python", "Java", "C++", "JavaScript", "Go", "Rust", "TypeScript", "SQL", "HTML/CSS", "Shell Script","C#","PHP","Ruby","Swift","Kotlin","gdscript","c",]
         )
     
     with col2:
