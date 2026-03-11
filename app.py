@@ -485,8 +485,7 @@ def page_imagegen():
                 "params": {
                     "width": width,
                     "height": height,
-                    "steps": 20,
-                    "n": 1,
+                    "steps": 15,                        # conform to requirements
                     "sampler_name": "k_euler",
                     "cfg_scale": 7,
                 },
@@ -518,25 +517,27 @@ def page_imagegen():
             elapsed = 0
             done = False
 
-            while elapsed < MAX_WAIT:
-                time.sleep(5)
-                elapsed += 5
-                try:
-                    chk = requests.get(
-                        f"{HORDE_URL}/generate/check/{job_id}",
-                        headers=HORDE_HEADERS,
-                        timeout=10,
-                    ).json()
-                except Exception:
-                    continue
+            # use a spinner to indicate that generation is in progress
+            with st.spinner("🔄 Generating image… this may take a minute"):
+                while elapsed < MAX_WAIT:
+                    time.sleep(5)
+                    elapsed += 5
+                    try:
+                        chk = requests.get(
+                            f"{HORDE_URL}/generate/check/{job_id}",
+                            headers=HORDE_HEADERS,
+                            timeout=10,
+                        ).json()
+                    except Exception:
+                        continue
 
-                wait_time = chk.get("wait_time", 0)
-                done = chk.get("done", False)
-                pct = min(elapsed / MAX_WAIT, 0.95)
-                progress_bar.progress(pct, text=f"✨ Generating… ~{wait_time}s remaining")
+                    wait_time = chk.get("wait_time", 0)
+                    done = chk.get("done", False)
+                    pct = min(elapsed / MAX_WAIT, 0.95)
+                    progress_bar.progress(pct, text=f"✨ Generating… ~{wait_time}s remaining")
 
-                if done:
-                    break
+                    if done:
+                        break
 
             progress_bar.progress(1.0, text="✅ Done!")
 
