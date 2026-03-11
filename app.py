@@ -15,6 +15,7 @@ APP_NAME = "TURING NOVA AI : THE NEXT GEN AI PLATFORM"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 MODEL = "stepfun/step-3.5-flash:free"
+IMAGEROUTER_API_KEY = os.getenv("IMAGEROUTER_API_KEY")
 
 # Page configuration
 st.set_page_config(
@@ -261,6 +262,39 @@ def extract_content(response: dict) -> str | None:
         return None
 
 
+def generate_image_imagerouter(prompt: str) -> dict:
+    """Call ImageRouter API and return a dict with either 'url' or 'error'."""
+    if not IMAGEROUTER_API_KEY:
+        return {"error": "API Key for ImageRouter not found. Set IMAGEROUTER_API_KEY in .env."}
+
+    headers = {
+        "Authorization": f"Bearer {IMAGEROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "prompt": prompt,
+        "model": "google/nano-banana-2:free",
+        "size": "1024x1024",
+        "output_format": "webp",
+    }
+
+    try:
+        resp = requests.post(
+            "https://api.imagerouter.io/v1/openai/images/generations",
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        url = data.get("data", [{}])[0].get("url")
+        if not url:
+            return {"error": "No URL returned from ImageRouter."}
+        return {"url": url}
+    except requests.exceptions.RequestException as e:
+        return {"error": str(e)}
+
+
 # ──────────────────────────────────────────────
 # Page: Homepage
 # ──────────────────────────────────────────────
@@ -444,18 +478,10 @@ def page_codegen():
 
 
 # ──────────────────────────────────────────────
-# Page: AI Image Generator (Stable Horde)
+# Page: AI Image Generator (ImageRouter)
 # ──────────────────────────────────────────────
+
 def page_imagegen():
-    import base64
-
-    HORDE_URL = "https://stablehorde.net/api/v2"
-    HORDE_HEADERS = {
-        "apikey": "0000000000",          # anonymous – no sign-up needed
-        "Content-Type": "application/json",
-        "Client-Agent": "TuringNovaAI:1.0:contact@turignova.ai",
-    }
-
     st.markdown('<div class="section-header">🎨 AI Image Generator</div>', unsafe_allow_html=True)
     st.markdown("Enter a text prompt below and generate a stunning AI image in seconds.")
 
@@ -465,131 +491,24 @@ def page_imagegen():
         "📝 Image Prompt",
         placeholder="e.g. A futuristic city at sunset, neon lights, cyberpunk style, ultra detailed",
     )
-
-    col_w, col_h, col_btn = st.columns([1, 1, 2])
-    with col_w:
-        width = st.selectbox("Width (px)", [512, 768], index=0)
-    with col_h:
-        height = st.selectbox("Height (px)", [512, 768], index=0)
-    with col_btn:
-        st.markdown("<br>", unsafe_allow_html=True)
-        generate = st.button("🖼️ Generate Image", type="primary", use_container_width=True)
+    generate = st.button("🖼️ Generate Image", type="primary", use_container_width=True)
 
     if generate:
         if not prompt.strip():
             st.warning("⚠️ Please enter a prompt before generating.")
         else:
-            # ── Step 1: Submit generation job ──────────────────────
-            payload = {
-                "prompt": prompt.strip(),
-                "params": {
-                    "width": width,
-                    "height": height,
-                    "steps": 15,                        # conform to requirements
-                    "sampler_name": "k_euler",
-                    "cfg_scale": 7,
-                },
-                "nsfw": False,
-                "censor_nsfw": True,
-                "models": ["stable_diffusion"],
-            }
+            with st.spinner("Generating image via ImageRouter..."):
+                result = generate_image_imagerouter(prompt.strip())
 
-            try:
-                submit_r = requests.post(
-                    f"{HORDE_URL}/generate/async",
-                    json=payload,
-                    headers=HORDE_HEADERS,
-                    timeout=30,
-                )
-                submit_r.raise_for_status()
-                job_id = submit_r.json().get("id")
-            except requests.exceptions.RequestException as e:
-                st.error(f"❌ Could not connect to image server: {e}")
-                return
-
-            if not job_id:
-                st.error("❌ Failed to start generation. Please try again.")
-                return
-
-            # ── Step 2: Poll until done ────────────────────────────
-            progress_bar = st.progress(0, text="🔄 Waiting for an AI worker...")
-            MAX_WAIT = 150   # seconds
-            elapsed = 0
-            done = False
-
-            # use a spinner to indicate that generation is in progress
-            with st.spinner("🔄 Generating image… this may take a minute"):
-                while elapsed < MAX_WAIT:
-                    time.sleep(5)
-                    elapsed += 5
-                    try:
-                        chk = requests.get(
-                            f"{HORDE_URL}/generate/check/{job_id}",
-                            headers=HORDE_HEADERS,
-                            timeout=10,
-                        ).json()
-                    except Exception:
-                        continue
-
-                    wait_time = chk.get("wait_time", 0)
-                    done = chk.get("done", False)
-                    pct = min(elapsed / MAX_WAIT, 0.95)
-                    progress_bar.progress(pct, text=f"✨ Generating… ~{wait_time}s remaining")
-
-                    if done:
-                        break
-
-            progress_bar.progress(1.0, text="✅ Done!")
-
-            if not done:
-                st.error("⏰ Timed out. The AI workers are busy — please try again in a moment.")
-                return
-
-            # ── Step 3: Fetch the finished image ───────────────────
-            try:
-                status_r = requests.get(
-                    f"{HORDE_URL}/generate/status/{job_id}",
-                    headers=HORDE_HEADERS,
-                    timeout=30,
-                )
-                status_r.raise_for_status()
-                result = status_r.json()
-            except requests.exceptions.RequestException as e:
-                st.error(f"❌ Could not retrieve image: {e}")
-                return
-
-            # detect worker faults
-            if result.get("faulted", False):
-                st.error("Generation faulted on worker. Please try again.")
-                return
-
-            generations = result.get("generations", [])
-            if not generations:
-                st.error("No image returned. The worker may have failed. Please try again.")
-                return
-
-            img_b64 = generations[0].get("img")
-            if not img_b64:
-                st.error("Image generation failed. Try another prompt.")
-                return
-
-            # safe to decode now
-            try:
-                image_bytes = base64.b64decode(img_b64)
-            except Exception:
-                st.error("Failed to decode image data. The response may be corrupted.")
-                return
-
-            st.success("🎉 Image generated successfully!")
-            st.image(image_bytes, caption=f'"{prompt.strip()}"', use_container_width=True)
-            st.download_button(
-                label="⬇️ Download Image",
-                data=image_bytes,
-                file_name="generated_image.png",
-                mime="image/png",
-                use_container_width=True,
-            )
-
+            if "error" in result:
+                st.error(f"❌ {result['error']}")
+            else:
+                image_url = result.get("url")
+                if image_url:
+                    st.image(image_url, use_container_width=True)
+                    st.success("🎉 Image generated successfully!")
+                else:
+                    st.error("Unexpected response format from ImageRouter.")
 
 # ──────────────────────────────────────────────
 # Sidebar navigation
