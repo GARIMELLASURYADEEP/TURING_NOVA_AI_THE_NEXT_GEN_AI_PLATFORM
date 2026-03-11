@@ -553,17 +553,32 @@ def page_imagegen():
                     timeout=30,
                 )
                 status_r.raise_for_status()
-                generations = status_r.json().get("generations", [])
+                result = status_r.json()
             except requests.exceptions.RequestException as e:
                 st.error(f"❌ Could not retrieve image: {e}")
                 return
 
-            if not generations:
-                st.error("❌ No image was returned. Please try again.")
+            # detect worker faults
+            if result.get("faulted", False):
+                st.error("Generation faulted on worker. Please try again.")
                 return
 
-            img_b64 = generations[0].get("img", "")
-            image_bytes = base64.b64decode(img_b64)
+            generations = result.get("generations", [])
+            if not generations:
+                st.error("No image returned. The worker may have failed. Please try again.")
+                return
+
+            img_b64 = generations[0].get("img")
+            if not img_b64:
+                st.error("Image generation failed. Try another prompt.")
+                return
+
+            # safe to decode now
+            try:
+                image_bytes = base64.b64decode(img_b64)
+            except Exception:
+                st.error("Failed to decode image data. The response may be corrupted.")
+                return
 
             st.success("🎉 Image generated successfully!")
             st.image(image_bytes, caption=f'"{prompt.strip()}"', use_container_width=True)
