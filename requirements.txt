@@ -1,6 +1,7 @@
 streamlit
+PyJWT
 requests
 python-dotenv
-gTTS
-PyPDF2
-qrcode[pil]
+pillow
+bcrypt
+passlib
