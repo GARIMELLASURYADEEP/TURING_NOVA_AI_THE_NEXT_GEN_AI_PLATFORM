@@ -10,6 +10,11 @@ try:
     GTTS_AVAILABLE = True
 except ImportError:
     GTTS_AVAILABLE = False
+try:
+    import PyPDF2
+    PYPDF2_AVAILABLE = True
+except ImportError:
+    PYPDF2_AVAILABLE = False
 
 load_dotenv()
 
@@ -45,7 +50,8 @@ if IS_DARK:
     CARD_CHAT_BG  = "linear-gradient(145deg,#160128 0%,#310866 55%,#18164a 100%)"
     CARD_CODE_BG  = "linear-gradient(145deg,#091438 0%,#1a3470 55%,#0d244f 100%)"
     CARD_IMG_BG   = "linear-gradient(145deg,#08201a 0%,#054d38 55%,#08231a 100%)"
-    CARD_TTS_BG   = "linear-gradient(145deg,#1a0e00 0%,#4d2500 55%,#2a1500 100%)"
+    CARD_TTS_BG      = "linear-gradient(145deg,#1a0e00 0%,#4d2500 55%,#2a1500 100%)"
+    CARD_RESUME_BG   = "linear-gradient(145deg,#0d001a 0%,#1e0040 55%,#100030 100%)"
     TEXT_PRIMARY  = "#ffffff"
     TEXT_SECONDARY= "#c4b5fd"
     TEXT_MUTED    = "#7c6aad"
@@ -67,7 +73,8 @@ else:
     CARD_CHAT_BG  = "linear-gradient(145deg,#ede9fe 0%,#ddd6fe 55%,#c4b5fd 100%)"
     CARD_CODE_BG  = "linear-gradient(145deg,#eff6ff 0%,#bfdbfe 55%,#93c5fd 100%)"
     CARD_IMG_BG   = "linear-gradient(145deg,#ecfdf5 0%,#a7f3d0 55%,#6ee7b7 100%)"
-    CARD_TTS_BG   = "linear-gradient(145deg,#fff7ed 0%,#fed7aa 55%,#fdba74 100%)"
+    CARD_TTS_BG      = "linear-gradient(145deg,#fff7ed 0%,#fed7aa 55%,#fdba74 100%)"
+    CARD_RESUME_BG   = "linear-gradient(145deg,#f5f3ff 0%,#ede9fe 55%,#ddd6fe 100%)"
     TEXT_PRIMARY  = "#1e1b4b"
     TEXT_SECONDARY= "#4c1d95"
     TEXT_MUTED    = "#7c3aed"
@@ -315,6 +322,24 @@ html, body, [class*="css"] {{
 .b-blue   {{ background:linear-gradient(90deg,#2563eb,#06b6d4); color:#fff; box-shadow:0 0 14px rgba(37,99,235,0.5); }}
 .b-green  {{ background:linear-gradient(90deg,#059669,#10b981); color:#fff; box-shadow:0 0 14px rgba(5,150,105,0.5); }}
 .b-orange {{ background:linear-gradient(90deg,#ea580c,#f59e0b); color:#fff; box-shadow:0 0 14px rgba(234,88,12,0.5); }}
+.b-indigo {{ background:linear-gradient(90deg,#4338ca,#7c3aed); color:#fff; box-shadow:0 0 14px rgba(67,56,202,0.5); }}
+
+/* ── Resume card ── */
+.tc-resume {{ background:{CARD_RESUME_BG}; box-shadow:0 8px 30px rgba(67,56,202,0.15); }}
+.tc-resume:hover {{ box-shadow:0 22px 55px rgba(67,56,202,0.45); border-color:rgba(129,140,248,0.4); }}
+
+/* ── Resume result panels ── */
+.res-panel {{
+    background: {'rgba(255,255,255,0.03)' if IS_DARK else 'rgba(255,255,255,0.7)'};
+    border: 1px solid {DIVIDER};
+    border-radius: 14px; padding: 20px 22px; margin-bottom: 14px;
+    animation: pgIn 0.4s ease;
+}}
+.res-panel-title {{
+    font-size: 0.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:1.5px; color:{TEXT_MUTED}; margin-bottom:8px;
+}}
+.res-panel-body {{ color:{TEXT_PRIMARY}; font-size:0.95rem; line-height:1.7; }}
 
 /* ── TTS card ── */
 .tc-tts {{ background:{CARD_TTS_BG}; box-shadow:0 8px 30px rgba(234,88,12,0.15); }}
@@ -629,10 +654,11 @@ def page_home():
             st.session_state["current_page"] = "imagegen"
             st.rerun()
 
-    # ── Second row — TTS card centred ──
+    # ── Second row — TTS + Resume (2 cols) ──
     st.markdown("<br>", unsafe_allow_html=True)
-    _, col_tts, _ = st.columns([1, 2, 1])
-    with col_tts:
+    col_tts2, col_res2 = st.columns(2, gap="large")
+
+    with col_tts2:
         st.markdown("""
         <div class="tool-card tc-tts">
             <span class="ti">🎙️</span>
@@ -644,6 +670,20 @@ def page_home():
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("Open Text to Speech →", key="btn_tts", use_container_width=True):
             st.session_state["current_page"] = "tts"
+            st.rerun()
+
+    with col_res2:
+        st.markdown("""
+        <div class="tool-card tc-resume">
+            <span class="ti">📄</span>
+            <div class="tt">Resume Analyzer</div>
+            <div class="td">Upload your resume and get instant AI-powered feedback — strengths, gaps, skill match, and improvement tips.</div>
+            <span class="badge b-indigo">AI Analyzer</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Open Resume Analyzer →", key="btn_resume", use_container_width=True):
+            st.session_state["current_page"] = "resume"
             st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -995,6 +1035,253 @@ def page_text_to_speech():
 
 
 # ─────────────────────────────────────────────────────────────────
+# Page: AI Resume Analyzer
+# ─────────────────────────────────────────────────────────────────
+def extract_resume_text(uploaded_file) -> str | None:
+    """Extract plain text from a PDF or TXT uploaded file. Returns text or None."""
+    fname = uploaded_file.name.lower()
+    try:
+        if fname.endswith(".txt"):
+            return uploaded_file.read().decode("utf-8", errors="ignore")
+        elif fname.endswith(".pdf"):
+            if not PYPDF2_AVAILABLE:
+                return None
+            reader = PyPDF2.PdfReader(uploaded_file)
+            return "\n".join(
+                page.extract_text() or "" for page in reader.pages
+            ).strip()
+        else:
+            return None
+    except Exception:
+        return None
+
+
+def page_resume_analyzer():
+    st.markdown('<div class="pg">', unsafe_allow_html=True)
+    st.markdown('<div class="sec-head">📄 AI Resume Analyzer</div>', unsafe_allow_html=True)
+    st.caption("Upload your resume, optionally specify a target role, and receive instant AI-powered feedback.")
+
+    if not PYPDF2_AVAILABLE:
+        st.warning(
+            "📦 **PyPDF2** is not installed. PDF parsing is unavailable. "
+            "Run `pip install PyPDF2` and restart the app. TXT files will still work."
+        )
+
+    st.markdown("---")
+
+    # ── Upload + job role row
+    up_col, role_col = st.columns([3, 2])
+    with up_col:
+        uploaded = st.file_uploader(
+            "📎 Upload your resume (PDF or TXT)",
+            type=["pdf", "txt"],
+            key="resume_file",
+            help="PDF and plain-text formats are supported."
+        )
+    with role_col:
+        job_role = st.text_input(
+            "🞯 Target job role (optional)",
+            placeholder="e.g. Senior Data Scientist",
+            key="resume_role"
+        )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    analyze_btn = st.button("🔍 Analyze Resume", type="primary", use_container_width=True)
+
+    if analyze_btn:
+        if uploaded is None:
+            st.warning("⚠️ Please upload a resume first.")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+
+        resume_text = extract_resume_text(uploaded)
+
+        if resume_text is None:
+            st.error("❌ Unsupported file format or could not read the file. Please upload a PDF or TXT.")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+
+        if not resume_text.strip():
+            st.error("❌ The uploaded file appears to be empty or the text could not be extracted.")
+            st.markdown('</div>', unsafe_allow_html=True)
+            return
+
+        # Truncate to reasonable length for the AI prompt
+        resume_snippet = resume_text[:6000]
+        role_line = f"Target Job Role: {job_role.strip()}" if job_role.strip() else "No specific job role provided."
+
+        # Build the analysis prompt
+        analysis_prompt = f"""You are an expert career coach and resume analyst. Analyze the following resume and provide structured feedback.
+
+{role_line}
+
+RESUME:
+{resume_snippet}
+
+Provide your analysis in EXACTLY this format (use these exact headings):
+
+## 📊 Resume Summary
+[2-3 sentence overview of the candidate]
+
+## 🛠️ Skills Detected
+[Bullet list of technical and soft skills found]
+
+## ✅ Strengths
+[Bullet list of 3-5 clear strengths]
+
+## ⚠️ Weaknesses / Gaps
+[Bullet list of 3-5 areas that need improvement]
+
+## 💡 Suggestions for Improvement
+[Bullet list of 4-6 specific, actionable suggestions]
+
+## 🎯 Job Match Score
+[Give a score out of 10 and explain the reasoning. If no job role was given, provide a general employability score.]"""
+
+        # Store prompt + text in session for Puter.js component
+        st.session_state["resume_prompt"] = analysis_prompt
+        st.session_state["resume_text_len"] = len(resume_text)
+        st.session_state["resume_analyzed"] = True
+
+    # ───────────────────────────── Puter.js AI analysis component
+    if st.session_state.get("resume_analyzed") and "resume_prompt" in st.session_state:
+        prompt_js = st.session_state["resume_prompt"].replace("`", "'").replace("\\", "\\\\")
+        word_count = st.session_state.get("resume_text_len", 0)
+
+        # Colour tokens for HTML component
+        CB  = "#050010" if IS_DARK else "#f8f7ff"
+        CBG = "linear-gradient(135deg,#0d0025 0%,#1a0045 50%,#08153a 100%)" if IS_DARK \
+              else "linear-gradient(135deg,#f0ecff 0%,#e8e0ff 50%,#ddd6fe 100%)"
+        CT  = "#e9d5ff" if IS_DARK else "#1e1b4b"
+        CM  = "#7c6aad" if IS_DARK else "#5b21b6"
+        CIB = "rgba(8,0,20,0.8)" if IS_DARK else "rgba(255,255,255,0.9)"
+        CBD = "rgba(119,89,217,0.18)" if IS_DARK else "rgba(109,40,217,0.1)"
+        CBR = "rgba(167,139,250,0.2)" if IS_DARK else "rgba(109,40,217,0.2)"
+
+        html_component = f"""<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'/>
+<script src='https://js.puter.com/v2/'></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+*{{box-sizing:border-box;margin:0;padding:0;}}
+body{{font-family:'Inter',sans-serif;background:transparent;color:{CT};padding:0;}}
+.card{{background:{CBG};border:1px solid {CBR};border-radius:20px;padding:28px 26px;
+  box-shadow:0 0 60px rgba(67,56,202,0.12);position:relative;overflow:hidden;}}
+.card::before{{content:'';position:absolute;top:-40%;left:-20%;width:55%;height:180%;
+  background:radial-gradient(ellipse,rgba(124,58,237,0.06) 0%,transparent 60%);pointer-events:none;}}
+#analyzeBtn{{width:100%;background:linear-gradient(135deg,#4338ca,#6d28d9);
+  background-size:200%;color:#fff;border:none;border-radius:12px;
+  font-family:'Inter',sans-serif;font-size:0.97rem;font-weight:700;
+  padding:14px 24px;cursor:pointer;margin-bottom:18px;
+  transition:transform .25s,box-shadow .25s;animation:bg 5s ease infinite;}}
+@keyframes bg{{0%,100%{{background-position:0% 50%;}}50%{{background-position:100% 50%;}} }}
+#analyzeBtn:hover:not(:disabled){{transform:translateY(-3px);box-shadow:0 12px 30px rgba(67,56,202,0.5);}}
+#analyzeBtn:disabled{{opacity:.55;cursor:not-allowed;}}
+#status{{font-size:.86rem;color:#a78bfa;min-height:22px;margin-bottom:18px;
+  display:flex;align-items:center;gap:8px;}}
+.spin{{display:inline-block;width:16px;height:16px;
+  border:2px solid rgba(167,139,250,0.25);border-top-color:#a78bfa;
+  border-radius:50%;animation:sp .7s linear infinite;}}
+@keyframes sp{{to{{transform:rotate(360deg);}}}}
+#result{{display:none;}}
+.section{{background:{CBD};border:1px solid {CBR};
+  border-radius:14px;padding:18px 20px;margin-bottom:12px;
+  animation:fadeIn .4s ease;}}
+@keyframes fadeIn{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:none}}}}
+.section-icon{{font-size:1.1rem;margin-right:6px;}}
+.section-title{{font-size:.7rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:1.5px;color:{CM};margin-bottom:8px;}}
+.section-body{{font-size:.93rem;line-height:1.75;color:{CT};white-space:pre-wrap;word-break:break-word;}}
+#dlBtn{{width:100%;margin-top:14px;background:linear-gradient(135deg,#059669,#10b981);
+  color:#fff;border:none;border-radius:12px;
+  font-family:'Inter',sans-serif;font-size:.92rem;font-weight:700;
+  padding:12px 24px;cursor:pointer;display:none;
+  transition:transform .25s,box-shadow .25s;}}
+#dlBtn:hover{{transform:translateY(-3px);box-shadow:0 10px 26px rgba(5,150,105,0.45);}}
+#errMsg{{color:#f87171;font-size:.86rem;margin-top:10px;display:none;
+  background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);
+  border-radius:10px;padding:10px 14px;}}
+.meta{{font-size:.75rem;color:{CM};margin-bottom:14px;}}
+</style>
+</head>
+<body>
+<div class='card'>
+  <div class='meta'>📄 Resume loaded &nbsp;·&nbsp; {word_count:,} characters extracted</div>
+  <button id='analyzeBtn' onclick='runAnalysis()'>🧠 Run AI Analysis</button>
+  <div id='status'></div>
+  <div id='result'></div>
+  <button id='dlBtn' onclick='downloadReport()'>⬇️ Download Report (.txt)</button>
+  <div id='errMsg'></div>
+</div>
+<script>
+const PROMPT = `{prompt_js}`;
+let reportText = '';
+async function runAnalysis() {{
+  const btn=document.getElementById('analyzeBtn'),
+        st=document.getElementById('status'),
+        res=document.getElementById('result'),
+        dl=document.getElementById('dlBtn'),
+        er=document.getElementById('errMsg');
+  er.style.display='none'; res.style.display='none'; dl.style.display='none';
+  btn.disabled=true;
+  st.innerHTML='<span class="spin"></span>&nbsp;✨ Analyzing your resume… this may take a moment';
+  try {{
+    const response = await puter.ai.chat(PROMPT);
+    const text = typeof response === 'string' ? response
+                 : (response?.message?.content || response?.content || JSON.stringify(response));
+    reportText = text;
+    res.innerHTML = renderSections(text);
+    res.style.display='block';
+    dl.style.display='block';
+    st.innerHTML='✅&nbsp;Analysis complete!';
+  }} catch(e) {{
+    er.textContent='❌ Analysis failed: '+(e.message||String(e));
+    er.style.display='block';
+    st.innerHTML='';
+  }} finally {{ btn.disabled=false; }}
+}}
+function renderSections(md) {{
+  const iconMap = {{
+    'Resume Summary':'📊',
+    'Skills Detected':'🛠️',
+    'Strengths':'✅',
+    'Weaknesses':'⚠️',
+    'Suggestions':'💡',
+    'Job Match':'🎯',
+  }};
+  const parts = md.split(/^## /m).filter(Boolean);
+  return parts.map(p => {{
+    const nl = p.indexOf('\\n');
+    const title = nl>-1 ? p.slice(0,nl).replace(/^#+\s*/,'').trim() : p.trim();
+    const body  = nl>-1 ? p.slice(nl+1).trim() : '';
+    const icon  = Object.entries(iconMap).find(([k])=>title.includes(k))?.[1] || '•';
+    return `<div class='section'>
+      <div class='section-title'><span class='section-icon'>${{icon}}</span>${{title}}</div>
+      <div class='section-body'>${{body.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+                                     .replace(/^[*-]\s+/gm,'• ')}}</div>
+    </div>`;
+  }}).join('');
+}}
+function downloadReport() {{
+  if(!reportText) return;
+  const a=document.createElement('a');
+  a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(reportText);
+  a.download='nova_resume_analysis.txt';
+  a.click();
+}}
+</script>
+</body>
+</html>"""
+
+        components.html(html_component, height=900, scrolling=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────
 # Sidebar
 # ─────────────────────────────────────────────────────────────────
 def sidebar():
@@ -1027,6 +1314,7 @@ def sidebar():
             "💻  Code Generator":  "codegen",
             "🎨  Image Generator": "imagegen",
             "🎙️  Text to Speech":  "tts",
+            "📄  Resume Analyzer": "resume",
         }
         for label, key in pages.items():
             is_active = st.session_state.get("current_page", "home") == key
@@ -1054,6 +1342,7 @@ def main():
     elif page == "codegen":  page_codegen()
     elif page == "imagegen": page_imagegen()
     elif page == "tts":      page_text_to_speech()
+    elif page == "resume":   page_resume_analyzer()
 
 
 if __name__ == "__main__":
