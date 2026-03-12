@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import streamlit.components.v1 as components
 import json
 import os
 import time
@@ -15,7 +16,6 @@ APP_NAME = "TURING NOVA AI : THE NEXT GEN AI PLATFORM"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 MODEL = "stepfun/step-3.5-flash:free"
-IMAGEROUTER_API_KEY = os.getenv("IMAGEROUTER_API_KEY")
 
 # Page configuration
 st.set_page_config(
@@ -262,37 +262,7 @@ def extract_content(response: dict) -> str | None:
         return None
 
 
-def generate_image_imagerouter(prompt: str) -> dict:
-    """Call ImageRouter API and return a dict with either 'url' or 'error'."""
-    if not IMAGEROUTER_API_KEY:
-        return {"error": "API Key for ImageRouter not found. Set IMAGEROUTER_API_KEY in .env."}
 
-    headers = {
-        "Authorization": f"Bearer {IMAGEROUTER_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "prompt": prompt,
-        "model": "google/nano-banana-2:free",
-        "size": "1024x1024",
-        "output_format": "webp",
-    }
-
-    try:
-        resp = requests.post(
-            "https://api.imagerouter.io/v1/openai/images/generations",
-            headers=headers,
-            json=payload,
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        url = data.get("data", [{}])[0].get("url")
-        if not url:
-            return {"error": "No URL returned from ImageRouter."}
-        return {"url": url}
-    except requests.exceptions.RequestException as e:
-        return {"error": str(e)}
 
 
 # ──────────────────────────────────────────────
@@ -342,7 +312,7 @@ def page_home():
             <span class="tool-icon">🎨</span>
             <div class="tool-title">Image Generator</div>
             <div class="tool-desc">Turn any text prompt into a stunning AI-generated image. Customize size and download your creation instantly.</div>
-            <span class="badge">Pollinations AI</span>
+            <span class="badge">Puter.js AI</span>
         </div>
         """, unsafe_allow_html=True)
         if st.button("Open Image Generator →", key="btn_img", use_container_width=True):
@@ -478,37 +448,205 @@ def page_codegen():
 
 
 # ──────────────────────────────────────────────
-# Page: AI Image Generator (ImageRouter)
+# Page: AI Image Generator (Puter.js)
 # ──────────────────────────────────────────────
 
 def page_imagegen():
     st.markdown('<div class="section-header">🎨 AI Image Generator</div>', unsafe_allow_html=True)
-    st.markdown("Enter a text prompt below and generate a stunning AI image in seconds.")
+    st.markdown("Enter a text prompt and let **Puter.js AI** generate a stunning image — right inside your browser, no API key needed.")
 
     st.markdown("---")
 
-    prompt = st.text_input(
-        "📝 Image Prompt",
-        placeholder="e.g. A futuristic city at sunset, neon lights, cyberpunk style, ultra detailed",
-    )
-    generate = st.button("🖼️ Generate Image", type="primary", use_container_width=True)
+    puter_html = r"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <script src="https://js.puter.com/v2/"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      background: transparent;
+      color: #e9d5ff;
+      padding: 0;
+    }
+    .card {
+      background: linear-gradient(145deg, #1e1b4b, #2d2369);
+      border: 1px solid rgba(167,139,250,0.25);
+      border-radius: 16px;
+      padding: 28px 28px 24px;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    #prompt {
+      flex: 1;
+      background: #0f0c29;
+      border: 1px solid rgba(167,139,250,0.4);
+      border-radius: 10px;
+      color: #e9d5ff;
+      font-size: 0.95rem;
+      padding: 12px 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #prompt::placeholder { color: #7c6aad; }
+    #prompt:focus { border-color: #a78bfa; }
+    #genBtn {
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 12px 22px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    #genBtn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(124,58,237,0.5);
+    }
+    #genBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+    #status {
+      font-size: 0.9rem;
+      color: #a78bfa;
+      min-height: 22px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(167,139,250,0.3);
+      border-top-color: #a78bfa;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #imgWrap {
+      width: 100%;
+      text-align: center;
+      min-height: 0;
+    }
+    #imgWrap img {
+      max-width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(103,76,230,0.5);
+      animation: fadeIn 0.5s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+    #dlBtn {
+      display: none;
+      margin: 16px auto 0;
+      background: linear-gradient(135deg, #059669, #065f46);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 10px 24px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    #dlBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(5,150,105,0.45);
+    }
+    #errMsg {
+      color: #f87171;
+      font-size: 0.88rem;
+      margin-top: 8px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="row">
+      <input id="prompt" type="text"
+        placeholder="e.g. A futuristic city at sunset, neon lights, cyberpunk style, ultra detailed" />
+      <button id="genBtn" onclick="generate()">🖼️ Generate</button>
+    </div>
+    <div id="status"></div>
+    <div id="imgWrap"></div>
+    <button id="dlBtn" onclick="downloadImg()">⬇️ Download Image</button>
+    <div id="errMsg"></div>
+  </div>
 
-    if generate:
-        if not prompt.strip():
-            st.warning("⚠️ Please enter a prompt before generating.")
-        else:
-            with st.spinner("Generating image via ImageRouter..."):
-                result = generate_image_imagerouter(prompt.strip())
+  <script>
+    let currentBlob = null;
+    let currentPrompt = '';
 
-            if "error" in result:
-                st.error(f"❌ {result['error']}")
-            else:
-                image_url = result.get("url")
-                if image_url:
-                    st.image(image_url, use_container_width=True)
-                    st.success("🎉 Image generated successfully!")
-                else:
-                    st.error("Unexpected response format from ImageRouter.")
+    async function generate() {
+      const promptEl = document.getElementById('prompt');
+      const btn      = document.getElementById('genBtn');
+      const status   = document.getElementById('status');
+      const imgWrap  = document.getElementById('imgWrap');
+      const dlBtn    = document.getElementById('dlBtn');
+      const errMsg   = document.getElementById('errMsg');
+
+      const p = promptEl.value.trim();
+      if (!p) {
+        errMsg.textContent = '⚠️ Please enter a prompt first.';
+        errMsg.style.display = 'block';
+        return;
+      }
+      errMsg.style.display = 'none';
+      currentPrompt = p;
+      currentBlob = null;
+
+      btn.disabled = true;
+      imgWrap.innerHTML = '';
+      dlBtn.style.display = 'none';
+      status.innerHTML = '<span class="spinner"></span>&nbsp;Generating image — please wait…';
+
+      try {
+        const img = await puter.ai.txt2img(p);
+        // puter.ai.txt2img returns an HTMLImageElement
+        img.style.maxWidth = '100%';
+        img.style.borderRadius = '12px';
+        img.style.boxShadow = '0 12px 40px rgba(103,76,230,0.5)';
+        img.style.animation = 'fadeIn 0.5s ease';
+        imgWrap.appendChild(img);
+
+        // Make blob for download
+        const resp = await fetch(img.src);
+        currentBlob = await resp.blob();
+        dlBtn.style.display = 'block';
+        status.innerHTML = '✅ Image generated successfully!';
+      } catch (e) {
+        errMsg.textContent = '❌ Error: ' + (e.message || String(e));
+        errMsg.style.display = 'block';
+        status.innerHTML = '';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function downloadImg() {
+      if (!currentBlob) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(currentBlob);
+      a.download = 'turing_nova_' + currentPrompt.slice(0, 40).replace(/\s+/g, '_') + '.png';
+      a.click();
+    }
+
+    // Also allow Enter key to trigger generation
+    document.getElementById('prompt').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') generate();
+    });
+  </script>
+</body>
+</html>
+"""
+    components.html(puter_html, height=520, scrolling=False)
 
 # ──────────────────────────────────────────────
 # Sidebar navigation
