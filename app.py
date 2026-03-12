@@ -3,7 +3,13 @@ import requests
 import streamlit.components.v1 as components
 import json
 import os
+import io
 from dotenv import load_dotenv
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+except ImportError:
+    GTTS_AVAILABLE = False
 
 load_dotenv()
 
@@ -39,6 +45,7 @@ if IS_DARK:
     CARD_CHAT_BG  = "linear-gradient(145deg,#160128 0%,#310866 55%,#18164a 100%)"
     CARD_CODE_BG  = "linear-gradient(145deg,#091438 0%,#1a3470 55%,#0d244f 100%)"
     CARD_IMG_BG   = "linear-gradient(145deg,#08201a 0%,#054d38 55%,#08231a 100%)"
+    CARD_TTS_BG   = "linear-gradient(145deg,#1a0e00 0%,#4d2500 55%,#2a1500 100%)"
     TEXT_PRIMARY  = "#ffffff"
     TEXT_SECONDARY= "#c4b5fd"
     TEXT_MUTED    = "#7c6aad"
@@ -60,6 +67,7 @@ else:
     CARD_CHAT_BG  = "linear-gradient(145deg,#ede9fe 0%,#ddd6fe 55%,#c4b5fd 100%)"
     CARD_CODE_BG  = "linear-gradient(145deg,#eff6ff 0%,#bfdbfe 55%,#93c5fd 100%)"
     CARD_IMG_BG   = "linear-gradient(145deg,#ecfdf5 0%,#a7f3d0 55%,#6ee7b7 100%)"
+    CARD_TTS_BG   = "linear-gradient(145deg,#fff7ed 0%,#fed7aa 55%,#fdba74 100%)"
     TEXT_PRIMARY  = "#1e1b4b"
     TEXT_SECONDARY= "#4c1d95"
     TEXT_MUTED    = "#7c3aed"
@@ -306,6 +314,14 @@ html, body, [class*="css"] {{
 .b-purple {{ background:linear-gradient(90deg,#7c3aed,#a855f7); color:#fff; box-shadow:0 0 14px rgba(124,58,237,0.5); }}
 .b-blue   {{ background:linear-gradient(90deg,#2563eb,#06b6d4); color:#fff; box-shadow:0 0 14px rgba(37,99,235,0.5); }}
 .b-green  {{ background:linear-gradient(90deg,#059669,#10b981); color:#fff; box-shadow:0 0 14px rgba(5,150,105,0.5); }}
+.b-orange {{ background:linear-gradient(90deg,#ea580c,#f59e0b); color:#fff; box-shadow:0 0 14px rgba(234,88,12,0.5); }}
+
+/* ── TTS card ── */
+.tc-tts {{ background:{CARD_TTS_BG}; box-shadow:0 8px 30px rgba(234,88,12,0.15); }}
+.tc-tts:hover {{ box-shadow:0 22px 55px rgba(234,88,12,0.45); border-color:rgba(251,146,60,0.4); }}
+
+/* ── Audio player ── */
+audio {{ width:100% !important; border-radius:12px !important; margin-top:6px; }}
 
 /* ── Buttons ── */
 .stButton > button {{
@@ -513,6 +529,34 @@ def extract_content(response: dict) -> str | None:
 
 
 # ─────────────────────────────────────────────────────────────────
+# Text-to-Speech helper
+# ─────────────────────────────────────────────────────────────────
+# Voice configurations: (gtts lang, gtts tld, slow)
+_VOICE_MAP = {
+    "Female Voice (Standard)":  ("en", "com",  False),
+    "Female Voice (Australian)":("en", "com.au",False),
+    "Male Voice (UK)":          ("en", "co.uk", False),
+    "Narrator (Slow & Clear)":  ("en", "com",  True),
+    "Spanish Voice":            ("es", "es",   False),
+    "French Voice":             ("fr", "fr",   False),
+}
+
+def generate_speech(text: str, voice: str) -> bytes | None:
+    """Convert text to MP3 bytes using gTTS. Returns bytes or None on error."""
+    if not GTTS_AVAILABLE:
+        return None
+    try:
+        lang, tld, slow = _VOICE_MAP.get(voice, ("en", "com", False))
+        tts = gTTS(text=text, lang=lang, tld=tld, slow=slow)
+        buf = io.BytesIO()
+        tts.write_to_fp(buf)
+        buf.seek(0)
+        return buf.read()
+    except Exception:
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────
 # Pages
 # ─────────────────────────────────────────────────────────────────
 def page_home():
@@ -583,6 +627,23 @@ def page_home():
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("Open Image Generator →", key="btn_img", use_container_width=True):
             st.session_state["current_page"] = "imagegen"
+            st.rerun()
+
+    # ── Second row — TTS card centred ──
+    st.markdown("<br>", unsafe_allow_html=True)
+    _, col_tts, _ = st.columns([1, 2, 1])
+    with col_tts:
+        st.markdown("""
+        <div class="tool-card tc-tts">
+            <span class="ti">🎙️</span>
+            <div class="tt">Text to Speech</div>
+            <div class="td">Turn any written text into natural-sounding speech. Choose a voice style and download the audio in seconds.</div>
+            <span class="badge b-orange">Voice AI</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Open Text to Speech →", key="btn_tts", use_container_width=True):
+            st.session_state["current_page"] = "tts"
             st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -864,6 +925,76 @@ document.getElementById('prompt').addEventListener('keydown',e=>{{if(e.key==='En
 
 
 # ─────────────────────────────────────────────────────────────────
+# Page: Text to Speech
+# ─────────────────────────────────────────────────────────────────
+def page_text_to_speech():
+    st.markdown('<div class="pg">', unsafe_allow_html=True)
+    st.markdown('<div class="sec-head">🎙️ Text to Speech</div>', unsafe_allow_html=True)
+    st.caption("Type or paste any text and hear it spoken aloud. Pick a voice, generate, and download your audio.")
+
+    if not GTTS_AVAILABLE:
+        st.error(
+            "📦 The **gTTS** library is not installed. "
+            "Please run `pip install gTTS` and restart the app."
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+        return
+
+    st.markdown("---")
+
+    # ── Input area
+    text_input = st.text_area(
+        "📄 Your text:",
+        height=180,
+        placeholder="Paste or type the text you'd like converted to speech\u2026",
+        key="tts_text_input"
+    )
+
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        voice = st.selectbox(
+            "🎤 Voice style:",
+            list(_VOICE_MAP.keys()),
+            key="tts_voice"
+        )
+    with c2:
+        char_count = len(text_input)
+        st.metric("Characters", f"{char_count:,}", help="gTTS works best with texts under 5,000 characters.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    if st.button("⚡ Generate Speech", type="primary", use_container_width=True):
+        if not text_input.strip():
+            st.warning("⚠️ Please enter some text first.")
+        elif len(text_input.strip()) > 5000:
+            st.warning("⚠️ Text is too long. Please keep it under 5,000 characters for best results.")
+        else:
+            with st.spinner("🎤 Generating speech\u2026"):
+                audio_bytes = generate_speech(text_input.strip(), voice)
+
+            if audio_bytes is None:
+                st.error("❌ Speech generation failed. Please try again.")
+            else:
+                st.success("✅ Speech generated successfully!")
+
+                # ── Audio preview
+                st.markdown("#### 🔊 Preview")
+                st.audio(audio_bytes, format="audio/mp3")
+
+                # ── Download
+                safe_name = text_input.strip()[:30].replace(" ", "_").replace("/", "-")
+                st.download_button(
+                    label="⬇️ Download Audio (.mp3)",
+                    data=audio_bytes,
+                    file_name=f"nova_speech_{safe_name}.mp3",
+                    mime="audio/mpeg",
+                    use_container_width=True,
+                )
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────
 # Sidebar
 # ─────────────────────────────────────────────────────────────────
 def sidebar():
@@ -895,6 +1026,7 @@ def sidebar():
             "💬  AI Chatbot":      "chatbot",
             "💻  Code Generator":  "codegen",
             "🎨  Image Generator": "imagegen",
+            "🎙️  Text to Speech":  "tts",
         }
         for label, key in pages.items():
             is_active = st.session_state.get("current_page", "home") == key
@@ -921,6 +1053,7 @@ def main():
     elif page == "chatbot":  page_chatbot()
     elif page == "codegen":  page_codegen()
     elif page == "imagegen": page_imagegen()
+    elif page == "tts":      page_text_to_speech()
 
 
 if __name__ == "__main__":
