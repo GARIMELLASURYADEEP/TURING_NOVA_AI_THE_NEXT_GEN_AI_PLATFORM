@@ -52,6 +52,7 @@ if IS_DARK:
     CARD_IMG_BG   = "linear-gradient(145deg,#08201a 0%,#054d38 55%,#08231a 100%)"
     CARD_TTS_BG      = "linear-gradient(145deg,#1a0e00 0%,#4d2500 55%,#2a1500 100%)"
     CARD_RESUME_BG   = "linear-gradient(145deg,#0d001a 0%,#1e0040 55%,#100030 100%)"
+    CARD_QR_BG       = "linear-gradient(145deg,#001a1a 0%,#004d4d 55%,#002a2a 100%)"
     TEXT_PRIMARY  = "#ffffff"
     TEXT_SECONDARY= "#c4b5fd"
     TEXT_MUTED    = "#7c6aad"
@@ -75,6 +76,7 @@ else:
     CARD_IMG_BG   = "linear-gradient(145deg,#ecfdf5 0%,#a7f3d0 55%,#6ee7b7 100%)"
     CARD_TTS_BG      = "linear-gradient(145deg,#fff7ed 0%,#fed7aa 55%,#fdba74 100%)"
     CARD_RESUME_BG   = "linear-gradient(145deg,#f5f3ff 0%,#ede9fe 55%,#ddd6fe 100%)"
+    CARD_QR_BG       = "linear-gradient(145deg,#ecfeff 0%,#a5f3fc 55%,#67e8f9 100%)"
     TEXT_PRIMARY  = "#1e1b4b"
     TEXT_SECONDARY= "#4c1d95"
     TEXT_MUTED    = "#7c3aed"
@@ -323,6 +325,11 @@ html, body, [class*="css"] {{
 .b-green  {{ background:linear-gradient(90deg,#059669,#10b981); color:#fff; box-shadow:0 0 14px rgba(5,150,105,0.5); }}
 .b-orange {{ background:linear-gradient(90deg,#ea580c,#f59e0b); color:#fff; box-shadow:0 0 14px rgba(234,88,12,0.5); }}
 .b-indigo {{ background:linear-gradient(90deg,#4338ca,#7c3aed); color:#fff; box-shadow:0 0 14px rgba(67,56,202,0.5); }}
+.b-cyan   {{ background:linear-gradient(90deg,#0891b2,#06b6d4); color:#fff; box-shadow:0 0 14px rgba(8,145,178,0.5); }}
+
+/* ── QR card ── */
+.tc-qr {{ background:{CARD_QR_BG}; box-shadow:0 8px 30px rgba(6,182,212,0.15); }}
+.tc-qr:hover {{ box-shadow:0 22px 55px rgba(6,182,212,0.45); border-color:rgba(34,211,238,0.4); }}
 
 /* ── Resume card ── */
 .tc-resume {{ background:{CARD_RESUME_BG}; box-shadow:0 8px 30px rgba(67,56,202,0.15); }}
@@ -684,6 +691,23 @@ def page_home():
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("Open Resume Analyzer →", key="btn_resume", use_container_width=True):
             st.session_state["current_page"] = "resume"
+            st.rerun()
+
+    # ── Third row — QR Code card centred ──
+    st.markdown("<br>", unsafe_allow_html=True)
+    _, col_qr, _ = st.columns([1, 2, 1])
+    with col_qr:
+        st.markdown("""
+        <div class="tool-card tc-qr">
+            <span class="ti">📱</span>
+            <div class="tt">QR Code Generator</div>
+            <div class="td">Instantly convert any URL, text, email, or phone number into a scannable QR code. Download it in one click.</div>
+            <span class="badge b-cyan">QR Generator</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Open QR Generator →", key="btn_qr", use_container_width=True):
+            st.session_state["current_page"] = "qrcode"
             st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1282,6 +1306,146 @@ function downloadReport() {{
 
 
 # ─────────────────────────────────────────────────────────────────
+# QR Code: helper + page
+# ─────────────────────────────────────────────────────────────────
+try:
+    import qrcode
+    from qrcode.image.pure import PyPNGImage
+    QRCODE_AVAILABLE = True
+except ImportError:
+    QRCODE_AVAILABLE = False
+
+# QR colour schemes per content type
+_QR_STYLES = {
+    "URL":   {"fill": "#06b6d4", "back": "#f0fdff"},
+    "Text":  {"fill": "#7c3aed", "back": "#faf5ff"},
+    "Email": {"fill": "#ea580c", "back": "#fff7ed"},
+    "Phone": {"fill": "#059669", "back": "#f0fdf4"},
+}
+
+def generate_qr_code(data: str, content_type: str = "URL") -> bytes | None:
+    """Generate a QR code PNG and return raw bytes."""
+    if not QRCODE_AVAILABLE or not data.strip():
+        return None
+    try:
+        style = _QR_STYLES.get(content_type, _QR_STYLES["URL"])
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=12,
+            border=4,
+        )
+        qr.add_data(data.strip())
+        qr.make(fit=True)
+        img = qr.make_image(
+            fill_color=style["fill"],
+            back_color=style["back"]
+        )
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return buf.read()
+    except Exception:
+        return None
+
+
+def page_ai_qr_generator():
+    st.markdown('<div class="pg">', unsafe_allow_html=True)
+    st.markdown('<div class="sec-head">📱 QR Code Generator</div>', unsafe_allow_html=True)
+    st.caption("Convert any URL, text, email, or phone into a high-quality, downloadable QR code instantly.")
+
+    if not QRCODE_AVAILABLE:
+        st.error(
+            "📦 The **qrcode** library is not installed. "
+            "Run `pip install qrcode[pil]` and restart the app."
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+        return
+
+    st.markdown("---")
+
+    # ── Input row
+    c_type, c_input = st.columns([1, 3])
+    with c_type:
+        content_type = st.selectbox(
+            "🏷️ Content type",
+            ["URL", "Text", "Email", "Phone"],
+            key="qr_type"
+        )
+    with c_input:
+        # Smart placeholder per type
+        placeholders = {
+            "URL":   "https://example.com",
+            "Text":  "Enter any text or message",
+            "Email": "name@example.com",
+            "Phone": "+91 98765 43210",
+        }
+        qr_input = st.text_input(
+            "✏️ Content to encode",
+            placeholder=placeholders.get(content_type, ""),
+            key="qr_input"
+        )
+
+    # ── Advanced options (collapsible)
+    with st.expander("⚙️ Advanced options", expanded=False):
+        adv_cols = st.columns(2)
+        with adv_cols[0]:
+            st.info(f"🎨 **Colour theme:** {content_type} style — {_QR_STYLES[content_type]['fill']}")
+        with adv_cols[1]:
+            st.info("🛡️ **Error correction:** High (H) — 30% recovery rate")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    if st.button("⚡ Generate QR Code", type="primary", use_container_width=True):
+        if not qr_input.strip():
+            st.warning("⚠️ Please enter some content to encode.")
+        else:
+            with st.spinner("📱 Generating your QR code…"):
+                qr_bytes = generate_qr_code(qr_input.strip(), content_type)
+
+            if qr_bytes is None:
+                st.error("❌ QR code generation failed. Please try again.")
+            else:
+                st.session_state["qr_bytes"]  = qr_bytes
+                st.session_state["qr_input"]  = qr_input.strip()
+                st.session_state["qr_type"]   = content_type
+
+    # ── Results panel (persists across reruns)
+    if st.session_state.get("qr_bytes"):
+        st.markdown("---")
+        qb     = st.session_state["qr_bytes"]
+        qi     = st.session_state.get("qr_input", "qr")
+        qtype  = st.session_state.get("qr_type", "URL")
+        cstyle = _QR_STYLES.get(qtype, _QR_STYLES["URL"])
+
+        # Centred QR image with coloured glow
+        st.markdown(
+            f"""<div style="text-align:center; margin:10px 0 18px;">
+                <img src='data:image/png;base64,{__import__('base64').b64encode(qb).decode()}'
+                     style="border-radius:16px;
+                            box-shadow:0 0 0 4px {cstyle['fill']}33, 0 16px 40px {cstyle['fill']}55;
+                            max-width:320px; width:100%;" alt="QR Code"/>
+            </div>""",
+            unsafe_allow_html=True
+        )
+
+        # Info chips
+        st.caption(f"📍 **Content:** `{qi[:80]}{'...' if len(qi)>80 else ''}`")
+
+        dl_name = f"nova_qr_{content_type.lower()}_{qi[:20].replace(' ','_').replace('/','')}.png"
+        st.download_button(
+            label="⬇️ Download QR Code (.png)",
+            data=qb,
+            file_name=dl_name,
+            mime="image/png",
+            use_container_width=True,
+        )
+        st.success("✅ QR code ready! Scan it with any camera or QR reader.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────
 # Sidebar
 # ─────────────────────────────────────────────────────────────────
 def sidebar():
@@ -1315,6 +1479,7 @@ def sidebar():
             "🎨  Image Generator": "imagegen",
             "🎙️  Text to Speech":  "tts",
             "📄  Resume Analyzer": "resume",
+            "📱  QR Generator":   "qrcode",
         }
         for label, key in pages.items():
             is_active = st.session_state.get("current_page", "home") == key
@@ -1343,6 +1508,7 @@ def main():
     elif page == "imagegen": page_imagegen()
     elif page == "tts":      page_text_to_speech()
     elif page == "resume":   page_resume_analyzer()
+    elif page == "qrcode":   page_ai_qr_generator()
 
 
 if __name__ == "__main__":
