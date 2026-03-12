@@ -1406,16 +1406,16 @@ def page_ai_qr_generator():
             if qr_bytes is None:
                 st.error("❌ QR code generation failed. Please try again.")
             else:
-                st.session_state["qr_bytes"]  = qr_bytes
-                st.session_state["qr_input"]  = qr_input.strip()
-                st.session_state["qr_type"]   = content_type
+                st.session_state["qr_bytes"]        = qr_bytes
+                st.session_state["qr_stored_input"]  = qr_input.strip()
+                st.session_state["qr_stored_type"]   = content_type
 
     # ── Results panel (persists across reruns)
     if st.session_state.get("qr_bytes"):
         st.markdown("---")
         qb     = st.session_state["qr_bytes"]
-        qi     = st.session_state.get("qr_input", "qr")
-        qtype  = st.session_state.get("qr_type", "URL")
+        qi     = st.session_state.get("qr_stored_input", "qr")
+        qtype  = st.session_state.get("qr_stored_type", "URL")
         cstyle = _QR_STYLES.get(qtype, _QR_STYLES["URL"])
 
         # Centred QR image with coloured glow
