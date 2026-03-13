@@ -29,7 +29,7 @@ def get_standardized_artifact_script(tool_type, prompt, config=None, file_data=N
             setupDownload(img.src, "generated_art.png", "png");
         """
     elif tool_type == "audio":
-        voice_style = (config or {}).get("voice", "female")
+        voice_style = (config or {}).get("voice", "male")
         render_logic = f"""
             document.getElementById('preview-box').innerHTML = `
                 <div style="text-align:center; padding:40px;">
@@ -45,6 +45,22 @@ def get_standardized_artifact_script(tool_type, prompt, config=None, file_data=N
             }};
             setupDownload("{prompt_safe}", "script.txt", "txt");
         """
+    elif tool_type == "story":
+        render_logic = f"""
+            const prompt = "Write a creative and engaging story based on this description. Use proper formatting with titles and paragraphs. Description: " + "{prompt_safe}";
+            const res = await puter.ai.chat(prompt);
+            const text = typeof res === 'string' ? res : (res.message?.content || '');
+            document.getElementById('preview-box').innerHTML = `<div style="white-space:pre-wrap; background:rgba(255,255,255,0.05); padding:30px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); font-family:'Georgia', serif; line-height:1.8; font-size:1.1rem; color:#f1f5f9;">${{text}}</div>`;
+            setupDownload(text, "story.txt", "txt");
+        """
+    elif tool_type == "resume":
+        render_logic = f"""
+            const prompt = "Generate a professional resume template based on the following details. Use a clear structure with sections like Contact Information, Professional Summary, Skills, Experience, and Education. Use clean formatting. Details: " + "{prompt_safe}";
+            const res = await puter.ai.chat(prompt);
+            const text = typeof res === 'string' ? res : (res.message?.content || '');
+            document.getElementById('preview-box').innerHTML = `<div style="white-space:pre-wrap; background:#fff; padding:40px; border-radius:8px; color:#1e293b; font-family:sans-serif; text-align:left; line-height:1.5;">${{text}}</div>`;
+            setupDownload(text, "resume.txt", "txt");
+        """
     else: # Text/Default
         render_logic = f"""
             const res = await puter.ai.chat("{prompt_safe}");
@@ -54,7 +70,6 @@ def get_standardized_artifact_script(tool_type, prompt, config=None, file_data=N
         """
 
     return f"""
-    <script src="https://js.puter.com/v2/"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <div style="background:#0b1120; color:white; padding:25px; border-radius:20px; border:1px solid rgba(255,255,255,0.08); font-family:sans-serif;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -119,13 +134,22 @@ def get_standardized_artifact_script(tool_type, prompt, config=None, file_data=N
                 {render_logic}
                 document.getElementById('ai-status').innerText = "✅ READY";
             }} catch (e) {{
-                document.getElementById('ai-status').innerText = "❌ ERROR";
+                console.error("AI Generation Error:", e);
+                let errorMsg = e.message || "Unknown error occurred";
+                let actionHtml = "";
+                
+                if (errorMsg.toLowerCase().includes("balance") || errorMsg.toLowerCase().includes("funding") || errorMsg.toLowerCase().includes("auth")) {{
+                    errorMsg = "⚠️ Engine Alert: " + errorMsg + ". Please check your account session in the Dashboard.";
+                }}
+                
+                document.getElementById('ai-status').innerHTML = "❌ ERROR: " + errorMsg + actionHtml;
+                document.getElementById('preview-box').innerHTML = `<div style="color:#ef4444; text-align:center; padding:20px;">${{errorMsg}}</div>`;
             }}
         }})();
     </script>
     """
 
-def get_puter_audio_ui(text, voice="female"):
+def get_puter_audio_ui(text, voice="male"):
     return get_standardized_artifact_script("audio", text, config={"voice": voice})
 
 def get_puter_image_script(prompt):

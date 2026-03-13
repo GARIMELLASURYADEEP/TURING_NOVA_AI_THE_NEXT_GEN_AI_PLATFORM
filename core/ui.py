@@ -128,15 +128,70 @@ def render_tool_card(name, icon, desc, category_name=None):
     st.html(card_html)
 
 def puter_component(html_content, height=600):
-    """Wrapper for Puter.js components."""
+    """Wrapper for Puter.js components with robust auth handling."""
     full_html = f"""<!DOCTYPE html>
     <html>
     <head>
         <script src="https://js.puter.com/v2/"></script>
-        <style>body{{margin:0;padding:0;background:transparent;}}</style>
+        <style>
+            body {{ margin:0; padding:0; background:transparent; font-family: 'Plus Jakarta Sans', sans-serif; color: white; }}
+            #puter-auth-header {{ 
+                display: flex; justify-content: flex-end; padding: 10px; 
+                background: rgba(0,0,0,0.2); font-size: 12px; gap: 15px; align-items: center;
+                border-bottom: 1px solid rgba(255,255,255,0.05);
+            }}
+            .auth-btn {{ 
+                background: transparent; border: 1px solid rgba(255,255,255,0.2); 
+                color: #94a3b8; padding: 4px 10px; border-radius: 6px; cursor: pointer; transition: 0.2s;
+            }}
+            .auth-btn:hover {{ border-color: #6366f1; color: white; }}
+            #auth-status {{ color: #10b981; font-weight: 600; }}
+        </style>
     </head>
     <body>
-        {html_content}
+        <div id="puter-auth-header">
+            <span id="auth-status">Initializing AI Engine...</span>
+        </div>
+        <div id="content-area">
+            {html_content}
+        </div>
+        <script>
+            async function checkAuth() {{
+                console.log("Checking Puter.js authentication state...");
+                try {{
+                    if (!puter.auth.isSignedIn()) {{
+                        console.log("Not signed in. Triggering Puter.js Login...");
+                        document.getElementById('auth-status').innerText = "🔑 Sign-in Required";
+                        await puter.auth.signIn();
+                    }}
+                    
+                    const user = await puter.auth.getUser();
+                    console.log("Signed in as:", user.username);
+                    document.getElementById('auth-status').innerHTML = "🟢 READY";
+                    
+                    // Refresh session/token if needed (Puter v2 handles most of this automatically)
+                }} catch (e) {{
+                    console.error("Authentication Error:", e);
+                    document.getElementById('auth-status').innerHTML = "🔴 Auth Error: " + e.message;
+                }}
+            }}
+
+            function switchAccount() {{
+                console.log("Logging out and clearing session...");
+                puter.auth.signOut();
+                localStorage.clear();
+                sessionStorage.clear();
+                // Clear any Puter specific storage if known
+                for (let key in localStorage) {{
+                    if (key.includes('puter')) localStorage.removeItem(key);
+                }}
+                location.reload();
+            }}
+            window.switchAccount = switchAccount;
+
+            // Start auth check
+            checkAuth();
+        </script>
     </body>
     </html>"""
     st.components.v1.html(full_html, height=height, scrolling=True)

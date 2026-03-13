@@ -3,6 +3,7 @@ import streamlit as st
 from backend import utils
 from backend import ai_handler
 from backend import database as db
+import core.ui as ui
 import time
 
 st.set_page_config(page_title="Creator Hub - Turing Nova AI", page_icon="🛠️", layout="wide")
@@ -13,7 +14,7 @@ utils.require_auth()
 CATEGORIES = {
     "Creative & Writing": [
         {"name": "Text Generator", "icon": "✍️", "type": "text", "hint": "Write any topic or paragraph idea."},
-        {"name": "Story Generator", "icon": "📖", "type": "text", "hint": "Describe the theme or characters."},
+        {"name": "Story Generator", "icon": "📖", "type": "story", "hint": "Describe the theme or characters."},
         {"name": "Script Generator", "icon": "🎬", "type": "text", "hint": "Describe a topic or scene to generate a script."},
         {"name": "Product Description", "icon": "🛍️", "type": "text", "hint": "Enter product name and features."},
         {"name": "AI Image Generator", "icon": "🎨", "type": "image", "hint": "Describe the image you want to generate."},
@@ -40,7 +41,7 @@ CATEGORIES = {
     "Business & Professional": [
         {"name": "Invoice Generator", "icon": "🧾", "type": "invoice", "hint": "Describe the details for your invoice (items, price, client)."},
         {"name": "Startup Idea Gen", "icon": "🏢", "type": "text", "hint": "Enter industry or technology keywords."},
-        {"name": "Resume Generator", "icon": "📄", "type": "text", "hint": "Provide skills and experience details."},
+        {"name": "Resume Generator", "icon": "📄", "type": "resume", "hint": "Provide skills and experience details."},
         {"name": "Business Name Gen", "icon": "🏷️", "type": "text", "hint": "Enter keywords for a business name."},
         {"name": "Ad Copy Generator", "icon": "💹", "type": "text", "hint": "Enter product or service details."},
     ],
@@ -85,7 +86,7 @@ def render_tool_ui(tool):
     # Tool persistence key
     tool_key = f"state_{tool['name']}"
     if tool_key not in st.session_state:
-        st.session_state[tool_key] = {"input": "", "output": None, "voice": "female"}
+        st.session_state[tool_key] = {"input": "", "output": None, "voice": "male"}
 
     st.markdown("<div class='result-container'>", unsafe_allow_html=True)
     
@@ -102,12 +103,8 @@ def render_tool_ui(tool):
                                 placeholder=tool['hint'],
                                 height=120,
                                 key=f"input_{tool_key}")
-        col1, _ = st.columns([1,2])
-        with col1:
-            voice_options = ["female", "male", "robotic", "deep"]
-            current_voice_index = voice_options.index(st.session_state[tool_key].get("voice", "female"))
-            voice = st.selectbox("Select Voice Style", voice_options, index=current_voice_index, key=f"voice_{tool_key}")
-            st.session_state[tool_key]["voice"] = voice
+        # Voice is default to male as per user request
+        st.session_state[tool_key]["voice"] = "male"
     else: # image
         user_input = st.text_input(f"Enter prompt for {tool['name']}:", 
                                   value=st.session_state[tool_key]["input"],
@@ -133,7 +130,7 @@ def render_tool_ui(tool):
     # Output Display
     if st.session_state[tool_key]["output"]:
         height = 650 if tool['type'] in ['website', 'game', 'ui', 'invoice'] else 450
-        st.components.v1.html(st.session_state[tool_key]["output"], height=height, scrolling=True)
+        ui.puter_component(st.session_state[tool_key]["output"], height=height)
                 
     st.markdown("</div>", unsafe_allow_html=True)
 

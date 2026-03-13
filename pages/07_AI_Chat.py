@@ -2,6 +2,7 @@
 import streamlit as st
 from backend import utils
 from backend import ai_handler
+import core.ui as ui
 
 st.set_page_config(page_title="AI Chat - Turing Nova AI", page_icon="💬", layout="wide")
 utils.inject_custom_css()
@@ -21,7 +22,6 @@ def chat_page():
 
     # Puter.js Chat Component
     chat_html = f"""
-    <script src="https://js.puter.com/v2/"></script>
     <style>
         body {{ background: #05070a; color: white; font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; padding: 0; }}
         #chat-container {{ height: 75vh; display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; background: #0b1120; }}
@@ -64,7 +64,13 @@ def chat_page():
                 botMsg.innerText = content;
                 saveMsg(content, 'bot');
             }} catch (e) {{
-                botMsg.innerText = "Error: " + e.message;
+                console.error("Chat Error:", e);
+                let errorMsg = e.message || "Unknown error";
+                if (errorMsg.includes("balance") || errorMsg.includes("funding")) {{
+                    botMsg.innerHTML = `⚠️ Low Balance. <button onclick="window.parent.switchAccount()" style="background:#ef4444; border:none; color:white; padding:4px 8px; border-radius:4px; cursor:pointer;">Switch AI Account</button>`;
+                }} else {{
+                    botMsg.innerText = "Error: " + errorMsg;
+                }}
             }}
             chat.scrollTop = chat.scrollHeight;
         }}
@@ -89,7 +95,7 @@ def chat_page():
     </script>
     """
     
-    st.components.v1.html(chat_html, height=700)
+    ui.puter_component(chat_html, height=700)
 
 if __name__ == "__main__":
     chat_page()

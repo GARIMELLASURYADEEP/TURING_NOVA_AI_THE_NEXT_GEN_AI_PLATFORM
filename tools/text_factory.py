@@ -32,7 +32,13 @@ def render_text_tool(name, icon, system_prompt, placeholder="Enter details here.
                     const content = typeof response === 'string' ? response : (response?.message?.content || response?.content || '');
                     document.getElementById('output').innerHTML = content.replace(/\\n/g, '<br>');
                 }} catch(e) {{
-                    document.getElementById('output').innerHTML = '<span style="color:#ef4444;">Error: ' + e.message + '</span>';
+                    console.error("Text Error:", e);
+                    let errorMsg = e.message || "Unknown error";
+                    if (errorMsg.includes("balance") || errorMsg.includes("funding")) {{
+                        document.getElementById('output').innerHTML = `⚠️ Low Balance. <button onclick="window.parent.switchAccount()" style="background:#ef4444; border:none; color:white; padding:4px 8px; border-radius:4px; cursor:pointer;">Switch Puter Account</button>`;
+                    }} else {{
+                        document.getElementById('output').innerHTML = '<span style="color:#ef4444;">Error: ' + errorMsg + '</span>';
+                    }}
                 }}
             }}
             run();

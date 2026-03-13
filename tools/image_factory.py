@@ -47,7 +47,13 @@ def render_image_tool(name, icon, prompt_prefix, placeholder="Describe what you 
                     // reg.style.display = 'inline-block';
                     document.getElementById('status').innerHTML = '<span style="color:#10b981; font-weight:700; font-family:sans-serif;">✅ Generation Complete!</span>';
                 }} catch(e) {{
-                    document.getElementById('status').innerHTML = '<span style="color:#ef4444; font-family:sans-serif;">Error: ' + e.message + '</span>';
+                    console.error("Image Error:", e);
+                    let errorMsg = e.message || "Unknown error";
+                    if (errorMsg.includes("balance") || errorMsg.includes("funding")) {{
+                        document.getElementById('status').innerHTML = `⚠️ Low Balance. <button onclick="window.parent.switchAccount()" style="background:#ef4444; border:none; color:white; padding:4px 8px; border-radius:4px; cursor:pointer;">Switch Puter Account</button>`;
+                    }} else {{
+                        document.getElementById('status').innerHTML = '<span style="color:#ef4444; font-family:sans-serif;">Error: ' + errorMsg + '</span>';
+                    }}
                 }}
             }}
             run();
