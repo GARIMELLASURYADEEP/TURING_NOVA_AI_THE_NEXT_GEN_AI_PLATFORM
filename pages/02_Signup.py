@@ -35,8 +35,12 @@ def signup_page():
                             conn.execute("INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)", 
                                            (email, hashed, role))
                             conn.commit()
-                            st.success("Account created successfully! Redirecting to login...")
-                            time.sleep(2)
+                            st.success("✨ Account created successfully! Go to login page to access your dashboard.")
+                            if st.button("Go to Login Page", use_container_width=True):
+                                st.switch_page("pages/01_Login.py")
+                            
+                            st.info("Redirecting you to login in 3 seconds...")
+                            time.sleep(3)
                             st.switch_page("pages/01_Login.py")
                     except Exception as e:
                         st.error(f"Error: {str(e)}")
